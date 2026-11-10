@@ -22,10 +22,10 @@
     <div class="box" id="details" hidden></div>
     <p class="note" style="margin-top:1.5rem">
       <strong>Importante:</strong> esta URL es un redirect_uri HTTPS para DevCenter.
+      Antes del redirect OAuth la app debe guardar un <code>state</code> aleatorio
+      (por ejemplo en <code>sessionStorage.meli_oauth_state</code>) y verificarlo aquí.
       El intercambio del <code>code</code> por <code>access_token</code> debe hacerse solo
-      en un servidor propio (POST a
-      <code>https://api.mercadolibre.com/oauth/token</code>), nunca en el navegador.
-      Esta página no muestra ni retiene el código de autorización.
+      en un servidor propio; esta página no muestra ni retiene el código.
     </p>
     <p><a href="/">Volver al inicio</a></p>
   </main>
@@ -35,7 +35,8 @@
       var hasCode = params.has("code");
       var hasError = params.has("error");
       var hasErrorDescription = params.has("error_description");
-      var state = params.get("state");
+      var hasState = params.has("state");
+      var state = hasState ? params.get("state") : null;
       var statusEl = document.getElementById("status");
       var detailsEl = document.getElementById("details");
       var expectedState = null;
@@ -76,34 +77,37 @@
           "El proveedor devolvió un error OAuth.",
           hasErrorDescription ? "Revise el flujo en DevCenter / la app que inicia OAuth." : "Sin descripción adicional del proveedor."
         ]);
+        state = null;
         return;
       }
 
       if (!hasCode) {
         setStatus("err", "No se recibió el parámetro code.");
-        showDetails(["Abra esta URL solo como redirect_uri del flujo OAuth."]);
+        showDetails([
+          "Este endpoint responde 200 como redirect_uri registrado en DevCenter.",
+          "El flujo OAuth real debe llegar con code y state tras el login en Mercado Libre."
+        ]);
+        state = null;
         return;
       }
 
-      if (expectedState) {
-        if (!state || state !== expectedState) {
-          setStatus("err", "Validación CSRF fallida (state).");
-          showDetails([
-            "El parámetro state no coincide con el valor guardado antes del redirect.",
-            "Reinicie el flujo OAuth desde la aplicación."
-          ]);
-          try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
-          state = null;
-          return;
-        }
+      // Require CSRF binding: never treat a code as success without a matching saved state.
+      if (!expectedState || !hasState || state !== expectedState) {
+        setStatus("err", "Validación CSRF fallida (state).");
+        showDetails([
+          "Se rechazó el redirect: falta state, no hay valor guardado, o no coinciden.",
+          "Genere un state aleatorio, guárdelo en sessionStorage.meli_oauth_state antes del redirect, y envíelo a Mercado Libre.",
+          "El código de autorización no se muestra ni se guarda en esta página."
+        ]);
         try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+        state = null;
+        return;
       }
 
-      setStatus("ok", "Redirect OAuth recibido.");
+      try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+      setStatus("ok", "Redirect OAuth recibido y state verificado.");
       showDetails([
-        expectedState
-          ? "State validado correctamente (CSRF)."
-          : "Genere y verifique state en la app que inicia el OAuth.",
+        "State validado correctamente (CSRF).",
         "El código de autorización no se muestra ni se guarda en esta página.",
         "Intercambie el code solo en su servidor; no use esta página como token endpoint."
       ]);
