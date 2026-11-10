@@ -21,12 +21,13 @@
     <p id="status" class="note">Procesando respuesta OAuth…</p>
     <div class="box" id="details" hidden></div>
     <p class="note" style="margin-top:1.5rem">
-      <strong>Importante:</strong> esta página estática solo demuestra la recepción del
-      <code>code</code>. En producción el endpoint
-      <code>https://meli-oauth.cursor.app/oauth/callback</code> debe intercambiar el código por
-      <code>access_token</code> en el servidor (POST a
-      <code>https://api.mercadolibre.com/oauth/token</code>) y no exponer el
-      <code>client_secret</code> en el navegador.
+      <strong>Importante:</strong> esta página estática solo confirma que el redirect OAuth llegó.
+      En producción el endpoint
+      <code>https://meli-oauth.apps.grok.bot/oauth/callback/</code> debe intercambiar el
+      <code>code</code> por <code>access_token</code> en el servidor (POST a
+      <code>https://api.mercadolibre.com/oauth/token</code>), validar <code>state</code>
+      contra el valor generado antes del redirect, y no exponer el
+      <code>client_secret</code> ni el <code>code</code> en el navegador.
     </p>
     <p><a href="/">Volver al inicio</a></p>
   </main>
@@ -36,26 +37,79 @@
       var code = params.get("code");
       var state = params.get("state");
       var error = params.get("error");
+      var errorDescription = params.get("error_description");
       var statusEl = document.getElementById("status");
       var detailsEl = document.getElementById("details");
+      var expectedState = null;
+
+      try {
+        expectedState = sessionStorage.getItem("meli_oauth_state");
+      } catch (e) {
+        expectedState = null;
+      }
+
+      function setStatus(kind, text) {
+        statusEl.textContent = "";
+        var span = document.createElement("span");
+        span.className = kind;
+        span.textContent = text;
+        statusEl.appendChild(span);
+      }
+
+      function showDetails(lines) {
+        detailsEl.hidden = false;
+        detailsEl.textContent = "";
+        lines.forEach(function (line) {
+          var div = document.createElement("div");
+          div.textContent = line;
+          detailsEl.appendChild(div);
+        });
+      }
+
+      function scrubSensitiveQuery() {
+        if (!window.history || !window.history.replaceState) return;
+        var clean = window.location.pathname + window.location.hash;
+        window.history.replaceState({}, document.title, clean);
+      }
 
       if (error) {
-        statusEl.innerHTML = '<span class="err">Autorización denegada o con error.</span>';
-        detailsEl.hidden = false;
-        detailsEl.textContent = "error=" + error + (params.get("error_description") ? (" — " + params.get("error_description")) : "");
+        setStatus("err", "Autorización denegada o con error.");
+        showDetails([
+          "Tipo de error recibido.",
+          errorDescription ? "Hay una descripción del error del proveedor." : "Sin descripción adicional."
+        ]);
+        scrubSensitiveQuery();
         return;
       }
 
       if (!code) {
-        statusEl.innerHTML = '<span class="err">No se recibió el parámetro code.</span> Abra esta URL solo como redirect_uri del flujo OAuth.';
+        setStatus("err", "No se recibió el parámetro code.");
+        showDetails(["Abra esta URL solo como redirect_uri del flujo OAuth."]);
         return;
       }
 
-      statusEl.innerHTML = '<span class="ok">Código de autorización recibido.</span>';
-      detailsEl.hidden = false;
-      detailsEl.innerHTML =
-        "<div><strong>code</strong> (ocultar en producción): " + code.slice(0, 8) + "…</div>" +
-        (state ? "<div><strong>state</strong>: " + state + "</div>" : "<div>Sin state — se recomienda enviarlo en la URL de autorización.</div>");
+      if (expectedState) {
+        if (!state || state !== expectedState) {
+          setStatus("err", "Validación CSRF fallida (state).");
+          showDetails([
+            "El parámetro state no coincide con el valor guardado antes del redirect.",
+            "Reinicie el flujo OAuth desde la aplicación."
+          ]);
+          try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+          scrubSensitiveQuery();
+          return;
+        }
+        try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+      }
+
+      setStatus("ok", "Código de autorización recibido.");
+      showDetails([
+        expectedState
+          ? "State validado correctamente (CSRF)."
+          : "State no estaba guardado en esta sesión; la app real debe generar y verificar state antes del redirect.",
+        "El código OAuth no se muestra en esta página. Intercámbielo solo en el servidor."
+      ]);
+      scrubSensitiveQuery();
     })();
   </script>
 </body>
