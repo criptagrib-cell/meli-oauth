@@ -8,7 +8,7 @@
     body { margin:0; font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif; background:linear-gradient(180deg,#faf8f4,#f6f3ee); color:#1a1a1a; }
     main { max-width:640px; margin:0 auto; padding:3rem 1.5rem; }
     h1 { font-size:1.5rem; }
-    .box { background:#fff; border:1px solid #d9d2c5; padding:1rem 1.2rem; border-radius:6px; word-break:break-all; }
+    .box { background:#fff; border:1px solid #d9d2c5; padding:1rem 1.2rem; border-radius:6px; }
     .ok { color:#2d5a3d; font-weight:700; }
     .err { color:#8a2b2b; font-weight:700; }
     .note { color:#555; font-size:0.95rem; }
@@ -21,41 +21,93 @@
     <p id="status" class="note">Procesando respuesta OAuth…</p>
     <div class="box" id="details" hidden></div>
     <p class="note" style="margin-top:1.5rem">
-      <strong>Importante:</strong> esta página estática solo demuestra la recepción del
-      <code>code</code>. En producción el endpoint
-      <code>https://meli-oauth.cursor.app/oauth/callback</code> debe intercambiar el código por
-      <code>access_token</code> en el servidor (POST a
-      <code>https://api.mercadolibre.com/oauth/token</code>) y no exponer el
-      <code>client_secret</code> en el navegador.
+      <strong>Importante:</strong> esta URL es un redirect_uri HTTPS para DevCenter.
+      El intercambio del <code>code</code> por <code>access_token</code> debe hacerse solo
+      en un servidor propio (POST a
+      <code>https://api.mercadolibre.com/oauth/token</code>), nunca en el navegador.
+      Esta página no muestra ni retiene el código de autorización.
     </p>
     <p><a href="/">Volver al inicio</a></p>
   </main>
   <script>
     (function () {
       var params = new URLSearchParams(window.location.search);
-      var code = params.get("code");
+      var hasCode = params.has("code");
+      var hasError = params.has("error");
+      var hasErrorDescription = params.has("error_description");
       var state = params.get("state");
-      var error = params.get("error");
       var statusEl = document.getElementById("status");
       var detailsEl = document.getElementById("details");
+      var expectedState = null;
 
-      if (error) {
-        statusEl.innerHTML = '<span class="err">Autorización denegada o con error.</span>';
+      // Drop sensitive query params from the address bar before updating the UI.
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState({}, document.title, window.location.pathname + window.location.hash);
+      }
+
+      try {
+        expectedState = sessionStorage.getItem("meli_oauth_state");
+      } catch (e) {
+        expectedState = null;
+      }
+
+      function setStatus(kind, text) {
+        statusEl.textContent = "";
+        var span = document.createElement("span");
+        span.className = kind;
+        span.textContent = text;
+        statusEl.appendChild(span);
+      }
+
+      function showDetails(lines) {
         detailsEl.hidden = false;
-        detailsEl.textContent = "error=" + error + (params.get("error_description") ? (" — " + params.get("error_description")) : "");
+        detailsEl.textContent = "";
+        lines.forEach(function (line) {
+          var div = document.createElement("div");
+          div.textContent = line;
+          detailsEl.appendChild(div);
+        });
+      }
+
+      // Never render raw query-string values into the DOM.
+      if (hasError) {
+        setStatus("err", "Autorización denegada o con error.");
+        showDetails([
+          "El proveedor devolvió un error OAuth.",
+          hasErrorDescription ? "Revise el flujo en DevCenter / la app que inicia OAuth." : "Sin descripción adicional del proveedor."
+        ]);
         return;
       }
 
-      if (!code) {
-        statusEl.innerHTML = '<span class="err">No se recibió el parámetro code.</span> Abra esta URL solo como redirect_uri del flujo OAuth.';
+      if (!hasCode) {
+        setStatus("err", "No se recibió el parámetro code.");
+        showDetails(["Abra esta URL solo como redirect_uri del flujo OAuth."]);
         return;
       }
 
-      statusEl.innerHTML = '<span class="ok">Código de autorización recibido.</span>';
-      detailsEl.hidden = false;
-      detailsEl.innerHTML =
-        "<div><strong>code</strong> (ocultar en producción): " + code.slice(0, 8) + "…</div>" +
-        (state ? "<div><strong>state</strong>: " + state + "</div>" : "<div>Sin state — se recomienda enviarlo en la URL de autorización.</div>");
+      if (expectedState) {
+        if (!state || state !== expectedState) {
+          setStatus("err", "Validación CSRF fallida (state).");
+          showDetails([
+            "El parámetro state no coincide con el valor guardado antes del redirect.",
+            "Reinicie el flujo OAuth desde la aplicación."
+          ]);
+          try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+          state = null;
+          return;
+        }
+        try { sessionStorage.removeItem("meli_oauth_state"); } catch (e) {}
+      }
+
+      setStatus("ok", "Redirect OAuth recibido.");
+      showDetails([
+        expectedState
+          ? "State validado correctamente (CSRF)."
+          : "Genere y verifique state en la app que inicia el OAuth.",
+        "El código de autorización no se muestra ni se guarda en esta página.",
+        "Intercambie el code solo en su servidor; no use esta página como token endpoint."
+      ]);
+      state = null;
     })();
   </script>
 </body>
