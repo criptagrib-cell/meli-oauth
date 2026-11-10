@@ -1,6 +1,8 @@
-# Grib Mercado Sync (meli-oauth)
+# Anaya Mercado Sync (meli-oauth)
 
-Static HTTPS pages for Mercado Libre DevCenter OAuth:
+Static HTTPS pages for Mercado Libre DevCenter OAuth.
+
+Operador: **Fabiola Martinez Anaya** (México, RFC MAAF751109IE2).
 
 | Path | Purpose |
 |------|---------|
@@ -12,16 +14,16 @@ Static HTTPS pages for Mercado Libre DevCenter OAuth:
 
 ## DevCenter Redirect URI
 
-After Cursor Publish (visibility **public**):
+Live (visibility **public**):
 
 ```text
-https://meli-oauth.cursor.app/oauth/callback/
+https://meli-oauth.apps.grok.bot/oauth/callback/
 ```
 
-If the host only serves the file form, use:
+Fallback:
 
 ```text
-https://meli-oauth.cursor.app/oauth/callback.html
+https://meli-oauth.apps.grok.bot/oauth/callback.html
 ```
 
 Register the URL that returns **HTTP 200 without a redirect**.
