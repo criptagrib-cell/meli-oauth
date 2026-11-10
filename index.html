@@ -54,7 +54,23 @@
       Grib Mercado Sync es una herramienta de Stanislav Grib que ayuda a vendedores a
       gestionar publicaciones, pedidos y operaciones en Mercado Libre a través de la API oficial.
     </p>
-    <a class="cta" href="/oauth/callback/">Conectar cuenta de Mercado Libre</a>
+    <a class="cta" id="oauth-demo" href="/oauth/callback/">Probar redirect_uri (callback)</a>
+    <script>
+      (function () {
+        var link = document.getElementById("oauth-demo");
+        if (!link) return;
+        link.addEventListener("click", function () {
+          try {
+            var bytes = new Uint8Array(16);
+            (window.crypto || window.msCrypto).getRandomValues(bytes);
+            var state = Array.prototype.map.call(bytes, function (b) {
+              return ("0" + b.toString(16)).slice(-2);
+            }).join("");
+            sessionStorage.setItem("meli_oauth_state", state);
+          } catch (e) {}
+        });
+      })();
+    </script>
   </header>
 
   <main>
