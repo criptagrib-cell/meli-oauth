@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>OAuth callback — Grib Mercado Sync</title>
+  <style>
+    body { margin:0; font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif; background:linear-gradient(180deg,#faf8f4,#f6f3ee); color:#1a1a1a; }
+    main { max-width:640px; margin:0 auto; padding:3rem 1.5rem; }
+    h1 { font-size:1.5rem; }
+    .box { background:#fff; border:1px solid #d9d2c5; padding:1rem 1.2rem; border-radius:6px; word-break:break-all; }
+    .ok { color:#2d5a3d; font-weight:700; }
+    .err { color:#8a2b2b; font-weight:700; }
+    .note { color:#555; font-size:0.95rem; }
+    code { background:#efeae0; padding:0.1rem 0.35rem; border-radius:3px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Autorización Mercado Libre</h1>
+    <p id="status" class="note">Procesando respuesta OAuth…</p>
+    <div class="box" id="details" hidden></div>
+    <p class="note" style="margin-top:1.5rem">
+      <strong>Importante:</strong> esta página estática solo demuestra la recepción del
+      <code>code</code>. En producción el endpoint
+      <code>https://meli-oauth.cursor.app/oauth/callback</code> debe intercambiar el código por
+      <code>access_token</code> en el servidor (POST a
+      <code>https://api.mercadolibre.com/oauth/token</code>) y no exponer el
+      <code>client_secret</code> en el navegador.
+    </p>
+    <p><a href="/">Volver al inicio</a></p>
+  </main>
+  <script>
+    (function () {
+      var params = new URLSearchParams(window.location.search);
+      var code = params.get("code");
+      var state = params.get("state");
+      var error = params.get("error");
+      var statusEl = document.getElementById("status");
+      var detailsEl = document.getElementById("details");
+
+      if (error) {
+        statusEl.innerHTML = '<span class="err">Autorización denegada o con error.</span>';
+        detailsEl.hidden = false;
+        detailsEl.textContent = "error=" + error + (params.get("error_description") ? (" — " + params.get("error_description")) : "");
+        return;
+      }
+
+      if (!code) {
+        statusEl.innerHTML = '<span class="err">No se recibió el parámetro code.</span> Abra esta URL solo como redirect_uri del flujo OAuth.';
+        return;
+      }
+
+      statusEl.innerHTML = '<span class="ok">Código de autorización recibido.</span>';
+      detailsEl.hidden = false;
+      detailsEl.innerHTML =
+        "<div><strong>code</strong> (ocultar en producción): " + code.slice(0, 8) + "…</div>" +
+        (state ? "<div><strong>state</strong>: " + state + "</div>" : "<div>Sin state — se recomienda enviarlo en la URL de autorización.</div>");
+    })();
+  </script>
+</body>
+</html>
